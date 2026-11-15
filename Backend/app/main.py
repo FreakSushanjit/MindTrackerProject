@@ -186,8 +186,19 @@ def get_fallback_health_response(message: str, text_emotion: str = "Neutral", fa
     )
 
 
-@app.get("/")
-def root():
+
+@app.get("/api/health")
+def health_check():
+    return {
+        "status": "ok",
+        "service": "MindTracker & AI Health Assistant",
+        "text_model_loaded": text_emotion_classifier._is_loaded,
+        "face_model_loaded": face_emotion_detector._is_loaded
+    }
+
+
+@app.get("/api/status")
+def status():
     return {
         "status": "ok",
         "service": "MindTracker & AI Health Assistant",
@@ -202,16 +213,6 @@ def root():
             "has_key": bool(api_key),
             "key_prefix": (api_key[:8] + "...") if api_key else "None"
         }
-    }
-
-
-@app.get("/api/health")
-def health_check():
-    return {
-        "status": "ok",
-        "service": "MindTracker & AI Health Assistant",
-        "text_model_loaded": text_emotion_classifier._is_loaded,
-        "face_model_loaded": face_emotion_detector._is_loaded
     }
 
 
