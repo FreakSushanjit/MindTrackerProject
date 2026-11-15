@@ -1,6 +1,3 @@
-// Expected backend contract (adjust to match app/api/chat.py and voice.py):
-//   POST /api/chat   { message }        -> { reply, is_emergency, audio_url? }
-//   POST /api/voice  multipart "audio"  -> { transcript, reply, is_emergency, audio_url? }
 const BASE = '/api'
 
 async function request(path, options) {
@@ -18,11 +15,15 @@ async function request(path, options) {
   return res.json()
 }
 
-export const sendMessage = (message) =>
+export const sendMessage = (message, { faceImage = null, cameraEnabled = false } = {}) =>
   request('/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({
+      message,
+      face_image: faceImage,
+      camera_enabled: cameraEnabled,
+    }),
   })
 
 export const sendVoice = (blob) => {
@@ -30,3 +31,15 @@ export const sendVoice = (blob) => {
   body.append('audio', blob, 'recording.webm')
   return request('/voice', { method: 'POST', body })
 }
+
+export const detectFace = (imageBase64) =>
+  request('/detect-face', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: imageBase64 }),
+  })
+
+export const fetchSongsByMood = (mood = 'calm', limit = 6) =>
+  request(`/songs?mood=${encodeURIComponent(mood)}&limit=${limit}`, {
+    method: 'GET',
+  })

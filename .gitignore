@@ -9,6 +9,14 @@ Frontend/.env
 !.env.example
 !Backend/.env.example
 
+# Large ML Model Weights
+model_weights/
+Backend/model_weights/
+*.safetensors
+*.pth
+*.keras
+*.bin
+
 # Python
 __pycache__/
 *.py[cod]
