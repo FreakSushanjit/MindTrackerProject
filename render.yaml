@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: mindtracker-ai
+    runtime: docker
+    plan: free
+    envVars:
+      - key: FALLBACK_MODE
+        value: auto
+      - key: NVIDIA_API
+        sync: false
+      - key: GROK_API
+        sync: false
+      - key: MODEL_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
