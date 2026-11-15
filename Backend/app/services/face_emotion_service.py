@@ -66,12 +66,20 @@ class FaceEmotionDetector:
         model.eval()
         self.model = model
 
-        # Load OpenCV face cascade
-        if self.cascade_path.exists():
-            self.face_cascade = cv2.CascadeClassifier(str(self.cascade_path))
-        else:
-            default_path = os.path.join(cv2.data.haarcascades, "haarcascade_frontalface_default.xml")
-            self.face_cascade = cv2.CascadeClassifier(default_path)
+        # Load OpenCV face cascade (gracefully skip if CascadeClassifier unavailable)
+        try:
+            if hasattr(cv2, 'CascadeClassifier'):
+                if self.cascade_path.exists():
+                    self.face_cascade = cv2.CascadeClassifier(str(self.cascade_path))
+                elif hasattr(cv2, 'data') and hasattr(cv2.data, 'haarcascades'):
+                    default_path = os.path.join(cv2.data.haarcascades, "haarcascade_frontalface_default.xml")
+                    self.face_cascade = cv2.CascadeClassifier(default_path)
+            else:
+                print("[FaceEmotionDetector] cv2.CascadeClassifier not available — using center-crop fallback.")
+                self.face_cascade = None
+        except Exception as e:
+            print(f"[FaceEmotionDetector] Cascade load warning: {e} — using center-crop fallback.")
+            self.face_cascade = None
 
         # Standard ImageNet / AffectNet image preprocessing
         self.transform = transforms.Compose([
