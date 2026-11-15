@@ -390,3 +390,12 @@ async def voice(audio: UploadFile = File(...)):
         "dominant_emotion": dominant_emotion,
         "music": music_recommendations
     }
+
+
+# Mount Frontend production build if dist directory exists
+from fastapi.staticfiles import StaticFiles
+
+frontend_dist = Path(__file__).resolve().parent.parent.parent / "Frontend" / "dist"
+if frontend_dist.exists() and (frontend_dist / "index.html").exists():
+    app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
+
