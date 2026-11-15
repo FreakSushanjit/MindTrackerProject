@@ -1,0 +1,15 @@
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+  --color-mist: #eaf1ef;
+  --color-ink: #153130;
+  --color-teal: #2c6e6a;
+  --color-deep: #1e4e4b;
+  --color-dusk: #5b5ba6;
+  --color-amber: #b45309;
+}
+
+html, body, #root { height: 100%; }
+body { @apply bg-mist font-sans text-ink antialiased; }
