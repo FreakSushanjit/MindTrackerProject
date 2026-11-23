@@ -6,6 +6,10 @@ services:
     envVars:
       - key: FALLBACK_MODE
         value: auto
+      - key: LLM_MODEL
+        value: nvidia/nemotron-3.5-bolt-e4b
+      - key: LLM_BASE_URL
+        value: https://integrate.api.nvidia.com/v1
       - key: NVIDIA_API
         sync: false
       - key: GROK_API

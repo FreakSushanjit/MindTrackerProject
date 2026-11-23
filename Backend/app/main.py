@@ -48,8 +48,8 @@ model_name = os.getenv("LLM_MODEL") or os.getenv("LLM_MODEL_2")
 if api_key.startswith("nvapi-") or os.getenv("NVIDIA_API") or os.getenv("NVIDIA_API_KEY"):
     if not base_url or "x.ai" in base_url or "meta.ai" in base_url:
         base_url = "https://integrate.api.nvidia.com/v1"
-    if not model_name or "grok" in model_name or "muse" in model_name:
-        model_name = "meta/llama-3.2-11b-vision-instruct"
+    if not model_name or "grok" in model_name or "muse" in model_name or "llama" in model_name:
+        model_name = "nvidia/nemotron-3.5-bolt-e4b"
 elif api_key.startswith("xai-") or os.getenv("GROK_API"):
     if not base_url or "nvidia" in base_url or "meta.ai" in base_url:
         base_url = "https://api.x.ai/v1"
@@ -68,10 +68,10 @@ else:
 
 fallback_mode = os.getenv("FALLBACK_MODE", "auto").lower() in ("true", "1", "auto")
 
-# Initialize OpenAI-compatible client
+# Initialize OpenAI-compatible client with quick timeout (6s) so UI never hangs for 30s
 client = None
 if api_key:
-    client = OpenAI(base_url=base_url, api_key=api_key)
+    client = OpenAI(base_url=base_url, api_key=api_key, timeout=6.0, max_retries=1)
 
 app = FastAPI(title="MindTracker & Health Assistant")
 
@@ -146,44 +146,164 @@ def check_emergency(text: str) -> bool:
     return any(re.search(pat, lowered) for pat in EMERGENCY_KEYWORDS)
 
 
-def get_fallback_health_response(message: str, text_emotion: str = "Neutral", face_emotion: Optional[str] = None) -> str:
-    """Provides a safe, rule-guided fallback health response if the upstream LLM is unavailable."""
-    msg = message.lower()
-    emotion_intro = ""
+import random
 
+
+def get_fallback_health_response(message: str, text_emotion: str = "Neutral", face_emotion: Optional[str] = None) -> str:
+    """Provides a safe, varied, evidence-based emotional health response."""
+    msg = message.lower()
+    
+    # 1. Dynamic emotional opening acknowledging multi-modal inputs
+    intros = []
     if face_emotion and face_emotion.lower() != "neutral":
         if text_emotion.lower() != face_emotion.lower():
-            emotion_intro = f"I notice from your facial expression that you may be feeling {face_emotion.lower()}, even though your words feel {text_emotion.lower()}. It's completely valid and safe to express how you are truly feeling.\n\n"
+            intros = [
+                f"I notice a gentle contradiction: while your words feel {text_emotion.lower()}, your facial expression carries signs of {face_emotion.lower()}. It's completely safe to let your guard down here.",
+                f"Looking at your expression, I sense some {face_emotion.lower()} lingering beneath the surface, even though you typed '{text_emotion.lower()}'. You don't have to carry it all alone.",
+                f"Your face seems to reflect {face_emotion.lower()} even as your message leans {text_emotion.lower()}. Your true feelings are completely valid and heard.",
+            ]
         else:
-            emotion_intro = f"I sense both from your words and expression that you're experiencing {text_emotion.lower()}.\n\n"
-    elif text_emotion.lower() in ("sad", "fear", "angry"):
-        emotion_intro = f"I hear the {text_emotion.lower()} in your words. Please take a gentle breath — you're not alone in feeling this way.\n\n"
+            intros = [
+                f"Both your words and expressions reflect that you're experiencing {text_emotion.lower()} right now.",
+                f"I can sense how much {text_emotion.lower()} is present for you in this moment.",
+                f"I see and hear the {text_emotion.lower()} you are carrying right now.",
+            ]
+    elif text_emotion.lower() in ("sad", "fear", "angry", "disgust"):
+        intros = [
+            f"I hear the {text_emotion.lower()} in your words. Please take a gentle, unhurried breath with me.",
+            f"Thank you for being open and sharing your feelings. Carrying {text_emotion.lower()} can feel exhausting.",
+            f"I'm right here with you. It takes courage to put feelings of {text_emotion.lower()} into words.",
+        ]
+    elif text_emotion.lower() in ("happy", "surprise"):
+        intros = [
+            "It's so wonderful to hear this lightness and positivity in your words!",
+            "I love sensing this spark of joy in what you shared!",
+            "Your message brings a wonderful sense of energy and warmth!",
+        ]
+    else:
+        intros = [
+            "Thank you for checking in and sharing what's on your mind.",
+            "I'm listening closely to what you've shared.",
+            "I appreciate you taking a moment to connect today.",
+        ]
+    
+    emotion_intro = random.choice(intros) + "\n\n"
 
-    if "anxious" in msg or "anxiety" in msg or "panic" in msg or text_emotion == "Fear":
-        return (
-            f"{emotion_intro}Take a slow, deep breath in for 4 seconds, hold for 4, and exhale for 4.\n\n"
-            "Anxiety and tension are very common physiological responses to stress. Helpful self-care steps include grounding exercises (focusing on 5 things you can see, 4 you can touch), gentle stretching, and listening to soothing music. If these feelings are persistent, speaking with a licensed therapist or mental health counselor is strongly recommended."
-        )
-    if "sad" in msg or "depressed" in msg or "lonely" in msg or text_emotion == "Sad":
-        return (
-            f"{emotion_intro}It's completely normal to have days that feel heavy or lonely.\n\n"
-            "Be kind to yourself today: wrap yourself in a warm blanket, listen to comforting music, hydrate, and consider reaching out to someone you trust. Remember that emotions ebb and flow like waves."
-        )
-    if "sleep" in msg or "insomnia" in msg or "tired" in msg:
-        return (
-            f"{emotion_intro}Difficulty sleeping can be caused by stress, screen time before bed, or irregular schedules.\n\n"
-            "Try keeping your bedroom cool and dark, avoiding bright screens for 60 minutes before bedtime, and establishing a consistent winding-down routine. Relaxing instrumental or soft tunes can also help quiet your mind."
-        )
+    # 2. Topic & Emotion specific response pools for rich variety
+    if "anxious" in msg or "anxiety" in msg or "panic" in msg or "scared" in msg or "nervous" in msg or text_emotion == "Fear":
+        anxious_options = [
+            (
+                "Take a slow breath: inhale through your nose for 4 seconds, hold for 4, and exhale gently through your mouth for 6.\n\n"
+                "Anxiety is your nervous system's alarm system misfiring—it feels intense, but it is not dangerous, and it *will* pass. "
+                "Try placing both feet flat on the floor and naming 3 physical things you can see around you right now. "
+                "What is the single biggest thought creating pressure for you at this moment?"
+            ),
+            (
+                "Let's do a quick somatic reset: drop your shoulders away from your ears, unclench your jaw, and let your belly soften.\n\n"
+                "When anxiety spikes, our body tries to protect us by tensing up. Remember: **you do not have to solve your entire future today—just this one present minute.** "
+                "Would it help to write down what's worrying you, or would you prefer listening to calming rhythms to settle your thoughts?"
+            ),
+            (
+                "Try the 5-4-3-2-1 grounding technique right now:\n"
+                "• 5 things you see\n"
+                "• 4 things you can physically touch\n"
+                "• 3 sounds you hear\n"
+                "• 2 things you can smell\n"
+                "• 1 deep, nourishing breath\n\n"
+                "You are safe right now in this exact room. Take a sip of water and let the music below ground your heart rate."
+            )
+        ]
+        return emotion_intro + random.choice(anxious_options)
+
+    if "sad" in msg or "depressed" in msg or "lonely" in msg or "cry" in msg or "crying" in msg or "heartbroken" in msg or text_emotion == "Sad":
+        sad_options = [
+            (
+                "It is completely okay to feel heavy and not be okay today. Sadness is not a personal failure—it is simply proof that you care deeply.\n\n"
+                "Be as gentle with yourself as you would be with a dear friend. Wrap yourself in warmth, sip something comforting, and don't force yourself to be cheerful. "
+                "Emotions are like waves—they rise, they peak, and they gently recede. I'm right here with you."
+            ),
+            (
+                "When your heart feels heavy, even small tasks can feel like climbing a mountain. Give yourself full permission to lower all expectations today.\n\n"
+                "If you feel like crying, let those tears flow; crying releases cortisol and endorphins that naturally calm your system. "
+                "What is one gentle, comforting thing you can offer yourself right now—even if it's just lying down with soothing music?"
+            ),
+            (
+                "Loneliness and sadness often whisper that nobody understands or that this feeling is permanent, but that isn't true.\n\n"
+                "You are worthy of support, patience, and kindness. Consider sending a quick note to someone safe, or simply let the comforting songs below keep you company as you rest. "
+                "Would you like to talk through what brought this sadness on, or would you rather keep things quiet and peaceful?"
+            )
+        ]
+        return emotion_intro + random.choice(sad_options)
+
+    if "angry" in msg or "mad" in msg or "frustrated" in msg or "irritated" in msg or text_emotion == "Angry":
+        angry_options = [
+            (
+                "Your frustration and anger are completely understandable. Anger is often a protective emotion telling us that an important boundary or expectation was violated.\n\n"
+                "Try releasing that physical tension: clench your fists tightly for 5 seconds, and then consciously release them, letting all the tension drain through your fingertips. "
+                "Do you want to vent uncensored about what happened? I'm here to listen without judgment."
+            ),
+            (
+                "When anger surges, your heart rate and adrenaline spike rapidly. Before deciding what to say or do next, give yourself a 2-minute timeout.\n\n"
+                "Splash cold water on your face—this activates the mammalian dive reflex, which physically slows down your pulse. "
+                "Remember: feeling angry is always valid, but how you channel that energy is where your real power lies."
+            )
+        ]
+        return emotion_intro + random.choice(angry_options)
+
+    if "happy" in msg or "excited" in msg or "great" in msg or "joy" in msg or text_emotion == "Happy":
+        happy_options = [
+            (
+                "What a gift to experience moments of genuine happiness and energy! Celebrating these moments actually strengthens positive neural pathways in the brain.\n\n"
+                "Take a deliberate 10 seconds to savor this sensation: what does this joy feel like in your body? "
+                "Enjoy the upbeat songs below to amplify this wonderful mood!"
+            ),
+            (
+                "I'm so glad things are feeling bright and positive for you today! It's so important to honor and celebrate the good days.\n\n"
+                "What was the highlight that made your day feel this way? Keep this momentum going!"
+            )
+        ]
+        return emotion_intro + random.choice(happy_options)
+
+    if "sleep" in msg or "insomnia" in msg or "tired" in msg or "exhausted" in msg:
+        sleep_options = [
+            (
+                "Exhaustion affects both the body and mind. If your thoughts are racing, remember that rest is still restorative, even if sleep takes time to arrive.\n\n"
+                "Try the 4-7-8 breathing technique: inhale quietly for 4 seconds, hold for 7, and exhale completely with a whoosh sound for 8. "
+                "Dim the screens, keep your room cool, and let the gentle music below help you unwind."
+            ),
+            (
+                "When you're running on empty, your emotional threshold drops. Be extra forgiving with yourself right now.\n\n"
+                "Try doing a 'brain dump': write down any looming thoughts or to-dos on a piece of paper so your mind knows they won't be forgotten overnight. "
+                "Give yourself permission to sign off and truly rest."
+            )
+        ]
+        return emotion_intro + random.choice(sleep_options)
+
     if "headache" in msg or "migraine" in msg:
         return (
-            f"{emotion_intro}Headaches often stem from tension, dehydration, eye strain, or lack of sleep.\n\n"
-            "Try drinking a glass of water, resting in a quiet, dimly lit room, or applying a cool compress to your forehead. If you experience a sudden 'thunderclap' headache, fever with stiff neck, or vision changes, seek immediate emergency medical care."
+            f"{emotion_intro}Headaches often stem from tension, dehydration, screen fatigue, or posture strain.\n\n"
+            "Try drinking a large glass of water, resting your eyes in a dim room, and gently massaging the base of your skull. "
+            "If your headache is sudden, unusually severe, or accompanied by fever or neck stiffness, please consult a medical professional promptly."
         )
 
-    return (
-        f"{emotion_intro}Thank you for sharing what is on your mind. While assessing symptoms or feelings like '{message}', it helps to consider how long they have been present and their severity.\n\n"
-        "Remember to stay hydrated, take moments to rest, and treat yourself with patience. Check out the music recommendations below to help match or gently elevate your mood!"
-    )
+    # General / Reflective fallback options
+    general_options = [
+        (
+            f"Thank you for sharing your thoughts. Sometimes just verbalizing what's on your mind is the first step toward clarity.\n\n"
+            "How has your energy been overall today? Remember to hydrate, take short pauses to stretch, and treat yourself with patience. "
+            "Feel free to explore the songs curated below to match or lift your rhythm!"
+        ),
+        (
+            f"I hear you. Whatever you are navigating right now, remember that progress isn't linear, and small steps count.\n\n"
+            "Take a quiet moment to check in with your physical body: are you holding tension in your neck or jaw? Let it release. "
+            "What would bring you a small slice of peace or comfort in the next hour?"
+        ),
+        (
+            f"I'm grateful you reached out. Balancing daily life can take a quiet toll on our emotional well-being.\n\n"
+            "Take things one breath at a time. The musical playlist below is tuned to your emotional frequency—give it a listen while you relax."
+        )
+    ]
+    return emotion_intro + random.choice(general_options)
 
 
 
@@ -295,7 +415,7 @@ def chat(request: ChatRequest):
     if not client or not api_key:
         fallback = get_fallback_health_response(message, text_emotion=text_emotion, face_emotion=face_emotion)
         return {
-            "reply": f"[MindTracker Local AI]: {fallback}",
+            "reply": fallback,
             "is_emergency": is_emergency,
             "source": "local_emotional_engine",
             "text_emotion": text_emotion_res,
@@ -317,11 +437,18 @@ def chat(request: ChatRequest):
                     "content": message,
                 },
             ],
-            temperature=0.4,
-            max_tokens=800,
+            temperature=0.6,
+            max_tokens=400,
+            timeout=5.0,
         )
 
         reply = response.choices[0].message.content or ""
+        if not reply.strip() and hasattr(response.choices[0].message, "reasoning_content"):
+            reply = response.choices[0].message.reasoning_content or ""
+
+        if not reply.strip():
+            # If model returned empty content, use the rich fallback
+            reply = get_fallback_health_response(message, text_emotion=text_emotion, face_emotion=face_emotion)
 
         return {
             "reply": reply,
@@ -335,20 +462,11 @@ def chat(request: ChatRequest):
 
     except Exception as err:
         err_msg = str(err)
+        print(f"[Chat LLM Exception] {err_msg}")
         if fallback_mode:
             fallback = get_fallback_health_response(message, text_emotion=text_emotion, face_emotion=face_emotion)
-            billing_hint = ""
-            if "console.x.ai" in err_msg or "credits" in err_msg.lower() or ("403" in err_msg and "x.ai" in base_url):
-                billing_hint = "⚠️ [Notice: Upstream Grok (xAI) API returned a 403 error. Serving via local emotional guidance engine:]\n\n"
-            elif "billing" in err_msg.lower() or "402" in err_msg:
-                billing_hint = "⚠️ [Notice: Upstream LLM API returned a 402 Billing error. Serving via local emotional guidance engine:]\n\n"
-            elif "401" in err_msg or "auth" in err_msg.lower():
-                billing_hint = "⚠️ [Notice: Upstream LLM authentication failed. Serving via local emotional guidance engine:]\n\n"
-            else:
-                billing_hint = f"⚠️ [Notice: Upstream LLM error. Serving via local emotional guidance engine:]\n\n"
-
             return {
-                "reply": f"{billing_hint}{fallback}",
+                "reply": fallback,
                 "is_emergency": is_emergency,
                 "source": "local_fallback_on_error",
                 "text_emotion": text_emotion_res,
